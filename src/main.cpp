@@ -7,6 +7,7 @@
 #include "commands/sync.hpp"
 #include "commands/list.hpp"
 #include "commands/status.hpp"
+#include "commands/remove.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -32,6 +33,10 @@ public:
 
         // status
         registry_["status"] = std::make_unique<StatusCommand>(store, manifest);
+
+        // remove
+        registry_["remove"] = std::make_unique<RemoveCommand>(store, manifest, git);
+        registry_["rm"]    = std::make_unique<RemoveCommand>(store, manifest, git);
     }
 
     /// Dispatch a command name; returns nullptr if unknown.
