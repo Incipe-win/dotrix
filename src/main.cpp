@@ -10,6 +10,7 @@
 #include "commands/remove.hpp"
 #include "commands/capture.hpp"
 #include "commands/scan.hpp"
+#include "commands/check.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -45,6 +46,9 @@ public:
 
         // scan
         registry_["scan"] = std::make_unique<ScanCommand>(store, manifest);
+
+        // check
+        registry_["check"] = std::make_unique<CheckCommand>(manifest);
     }
 
     /// Dispatch a command name; returns nullptr if unknown.
