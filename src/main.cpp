@@ -9,6 +9,7 @@
 #include "commands/status.hpp"
 #include "commands/remove.hpp"
 #include "commands/capture.hpp"
+#include "commands/scan.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -41,6 +42,9 @@ public:
 
         // capture
         registry_["capture"] = std::make_unique<CaptureCommand>(store, manifest, git);
+
+        // scan
+        registry_["scan"] = std::make_unique<ScanCommand>(store, manifest);
     }
 
     /// Dispatch a command name; returns nullptr if unknown.
