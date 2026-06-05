@@ -1,64 +1,85 @@
-# dotfiles
+# dotrix
 
-> Managed by `dotrix` — one binary, no manifest editing, no dependencies.
+> Single-binary dotfiles manager.  Modern C++20, command-pattern architecture.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/huachaowu/dotfiles.git ~/dotfiles
-cd ~/dotfiles
+git clone https://github.com/huachaowu/dotrix.git ~/dotrix
+cd ~/dotrix
+xmake                              # build
 
-# Build
-xmake
+# Start managing configs
+./dotrix ~/.zshrc                  # add a file
+./dotrix ~/.config/nvim/           # add a directory
 
-# Add config files
-./dotrix ~/.zshrc
-./dotrix ~/.tmux.conf
-./dotrix ~/.config/nvim/
-
-# On a new machine: install symlinks
-./dotrix
+# New machine: deploy everything
+git clone <your-dotfiles-repo> ~/.dotfiles
+./dotrix sync                      # deploys with auto-backup
 ```
 
 ## Commands
 
-```bash
-dotrix <file...>       # Add files/dirs to management
-dotrix                 # Install symlinks (backs up existing files)
-dotrix install         # Same as above
-dotrix install --dry   # Preview, don't touch anything
-dotrix sync            # Copy changes from live files → repo + commit
-dotrix list            # Show managed files
-dotrix status          # Show files with uncommitted changes
-dotrix help
+```
+dotrix add     <file...>    Start tracking config files
+dotrix remove  <file...>    Stop tracking (alias: rm)
+dotrix capture              Save live changes → repo + git commit
+dotrix sync                 Deploy repo → live (backs up existing files)
+dotrix list                 Show managed files
+dotrix status               Show files with uncommitted changes
+```
+
+## Workflow
+
+```
+dotrix add ~/.zshrc          # Start managing
+vim ~/.zshrc                 # Edit as usual
+dotrix status                # See what changed
+dotrix capture               # Save changes → repo + commit
+
+# On a new machine:
+git clone <repo> ~/.dotfiles
+dotrix sync                  # Deploy all configs (backs up existing files)
 ```
 
 ## How it works
 
 ```
-dotrix ~/.zshrc
-  → Copies ~/.zshrc → ~/dotfiles/.zshrc         (mirrors $HOME structure)
-  → Adds ".zshrc" to .dotrix/manifest
-  → git commit "dotrix: add .zshrc"
+dotrix add ~/.zshrc
+  → copies to ~/.dotfiles/.zshrc
+  → appends to .dotrix/manifest
+  → git commit "dotrix: add /home/user/.zshrc"
 
-dotrix                    (new machine)
-  → Reads .dotrix/manifest
-  → For each file: creates symlink ~/.zshrc → ~/dotfiles/.zshrc
-  → If ~/.zshrc already exists → backs up to ~/.zshrc.dotrix.bak first
+dotrix sync
+  → reads .dotrix/manifest
+  → for each file: if live file exists & differs → backup to .dotrix.bak
+  → copies repo → live
+
+dotrix capture
+  → compares live vs repo
+  → copies changed files live → repo
+  → git commit
 ```
 
-## Structure
+## Build
+
+```bash
+xmake          # debug:   xmake f -m debug && xmake
+```
+
+Requires: C++20 compiler, xmake.
+
+## Architecture
 
 ```
-~/dotfiles/                  # git repo
-├── .dotrix/
-│   └── manifest             # one path per line (home-relative)
-├── .zshrc                   # managed file (mirrors ~/.zshrc)
-├── .tmux.conf               # managed file (mirrors ~/.tmux.conf)
-├── .config/
-│   └── nvim/                # managed dir (mirrors ~/.config/nvim/)
-├── dotrix                   # the binary
-├── src/                     # C++ source
-├── xmake.lua
-└── .gitignore
+src/
+├── main.cpp                 # Entry + Dispatcher (command registry)
+├── core/    config, types   # Configuration & common types
+├── ui/      reporter        # Output formatting
+├── util/    fs, process     # Filesystem & subprocess helpers
+├── repo/    store, manifest, git   # Data layer
+├── sync/    strategy        # ISyncStrategy → CopySyncStrategy
+└── commands/ add, remove, capture, sync, list, status
 ```
+
+Add a command: implement `ICommand`, register in `Dispatcher` — one line.
