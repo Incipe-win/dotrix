@@ -7,9 +7,9 @@ namespace fs = std::filesystem;
 
 namespace dotrix {
 
-/// A managed entry — can be a single file or a directory.
+/// A managed entry — path relative to $HOME, e.g. ".zshrc"
 struct Entry {
-    std::string original_path;   // absolute path, e.g. /home/user/.zshrc
+    std::string relative_path;   // home-relative, e.g. ".zshrc"
 };
 
 using Manifest = std::vector<Entry>;

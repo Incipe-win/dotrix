@@ -13,20 +13,19 @@ int CaptureCommand::execute(const std::vector<std::string>& /*args*/) {
 
     std::vector<std::string> updated;
     for (auto& entry : manifest) {
-        auto live = store_.live_path(entry.original_path);
+        auto live = store_.live_path(entry.relative_path);
 
         if (!fs::exists(live)) {
-            Reporter::warn("missing on disk, skipping: " + entry.original_path);
+            Reporter::warn("missing on disk, skipping: ~/" + entry.relative_path);
             continue;
         }
 
-        if (!store_.dirty(entry.original_path)) {
-            continue; // unchanged, skip silently
-        }
+        if (!store_.dirty(entry.relative_path))
+            continue;
 
-        Reporter::info("capture: " + entry.original_path);
-        store_.capture(entry.original_path);
-        updated.push_back(entry.original_path);
+        Reporter::info("capture: ~/" + entry.relative_path);
+        store_.store(entry.relative_path);
+        updated.push_back(entry.relative_path);
     }
 
     if (updated.empty()) {
@@ -36,7 +35,7 @@ int CaptureCommand::execute(const std::vector<std::string>& /*args*/) {
 
     std::ostringstream msg;
     msg << "dotrix: capture";
-    for (auto& u : updated) msg << " (" << u << ")";
+    for (auto& u : updated) msg << " ~/" << u;
     git_.commit(msg.str());
     Reporter::ok("captured " + std::to_string(updated.size()) + " file(s)");
 

@@ -9,7 +9,7 @@ int ListCommand::execute(const std::vector<std::string>& /*args*/) {
         std::cout << "(empty)\n";
         return 0;
     }
-    for (auto& e : m) std::cout << "  " << e.original_path << "\n";
+    for (auto& e : m) std::cout << "  ~/" << e.relative_path << "\n";
     std::cout << m.size() << " file(s)\n";
     return 0;
 }

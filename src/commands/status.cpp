@@ -9,15 +9,15 @@ int StatusCommand::execute(const std::vector<std::string>& /*args*/) {
     int dirty = 0;
 
     for (auto& e : m) {
-        auto live = store_.live_path(e.original_path);
-        auto repo = store_.repo_path(e.original_path);
+        auto live = store_.live_path(e.relative_path);
+        auto repo = store_.repo_path(e.relative_path);
 
         if (!fs::exists(live)) {
-            std::cout << "  D  " << e.original_path << "  (missing)\n"; ++dirty;
+            std::cout << "  D  ~/" << e.relative_path << "  (missing)\n"; ++dirty;
         } else if (!fs::exists(repo)) {
-            std::cout << "  A  " << e.original_path << "  (not in repo)\n"; ++dirty;
-        } else if (store_.dirty(e.original_path)) {
-            std::cout << "  M  " << e.original_path << "  (modified)\n"; ++dirty;
+            std::cout << "  A  ~/" << e.relative_path << "  (not in repo)\n"; ++dirty;
+        } else if (store_.dirty(e.relative_path)) {
+            std::cout << "  M  ~/" << e.relative_path << "  (modified)\n"; ++dirty;
         }
     }
 

@@ -27,15 +27,16 @@ int AddCommand::execute(const std::vector<std::string>& args) {
             continue;
         }
 
-        auto rel = util::relative_to(src, store_.config().home);
-        if (rel.find("..") == 0) {
+        std::string rel;
+        try {
+            rel = store_.to_relative(src);
+        } catch (...) {
             Reporter::warn("outside $HOME, skipping: " + arg);
             continue;
         }
 
-        auto orig = fs::canonical(src).string();
-        if (manifest_.contains(orig)) {
-            Reporter::ok("already managed: " + arg);
+        if (manifest_.contains(rel)) {
+            Reporter::ok("already managed: ~/" + rel);
             continue;
         }
 
@@ -44,15 +45,14 @@ int AddCommand::execute(const std::vector<std::string>& args) {
         if (!findings.empty()) {
             SecretsGuard::report(findings, src);
 
-            // Store redacted version to repo, live file untouched
-            auto dst = store_.repo_path(orig);
+            auto dst = store_.repo_path(rel);
             int n = 0;
             if (fs::is_directory(src)) {
                 fs::create_directories(dst);
                 for (auto& e : fs::recursive_directory_iterator(src)) {
                     if (!e.is_directory()) {
-                        auto rel_path = fs::relative(e.path(), src);
-                        n += SecretsGuard::redact_file(e.path(), dst / rel_path);
+                        auto rp = fs::relative(e.path(), src);
+                        n += SecretsGuard::redact_file(e.path(), dst / rp);
                     }
                 }
             } else {
@@ -60,14 +60,13 @@ int AddCommand::execute(const std::vector<std::string>& args) {
                 n = SecretsGuard::redact_file(src, dst);
             }
             redacted_count += n;
-            Reporter::ok("redacted " + std::to_string(n) + " secret(s), added: " + arg);
+            Reporter::ok("redacted " + std::to_string(n) + " secret(s), added: ~/" + rel);
         } else {
-            // Clean file — store as-is
-            store_.store(orig);
-            Reporter::ok("added: " + arg);
+            store_.store(rel);
+            Reporter::ok("added: ~/" + rel);
         }
 
-        added.push_back({orig});
+        added.push_back({rel});
     }
 
     if (added.empty()) {
@@ -75,15 +74,14 @@ int AddCommand::execute(const std::vector<std::string>& args) {
         return 0;
     }
 
-    if (redacted_count > 0) {
+    if (redacted_count > 0)
         Reporter::warn(std::to_string(redacted_count) + " value(s) redacted — live files untouched");
-    }
 
     manifest_.append(added);
 
     std::ostringstream msg;
     msg << "dotrix: add";
-    for (auto& e : added) msg << " " << e.original_path;
+    for (auto& e : added) msg << " ~/" << e.relative_path;
     git_.commit(msg.str());
     Reporter::ok("committed");
 

@@ -17,34 +17,32 @@ int SyncCommand::execute(const std::vector<std::string>& args) {
 
     int copied = 0, skipped = 0;
     for (auto& entry : manifest) {
-        auto repo = store_.repo_path(entry.original_path);
+        auto repo = store_.repo_path(entry.relative_path);
 
         if (!fs::exists(repo)) {
-            Reporter::warn("not in repo: " + entry.original_path);
+            Reporter::warn("not in repo: ~/" + entry.relative_path);
             continue;
         }
 
-        // If repo contains redacted placeholders and live file exists, skip
         if (!force && SecretsGuard::is_redacted(repo)) {
-            auto live = store_.live_path(entry.original_path);
+            auto live = store_.live_path(entry.relative_path);
             if (fs::exists(live)) {
-                Reporter::warn("redacted, skipping: " + entry.original_path
+                Reporter::warn("redacted, skipping: ~/" + entry.relative_path
                                + " (use --force to overwrite)");
                 ++skipped;
                 continue;
             }
-            // Live file doesn't exist — deploy redacted as template
-            Reporter::info("deploying template: " + entry.original_path
+            Reporter::info("deploying template: ~/" + entry.relative_path
                            + " (fill in redacted values)");
         }
 
-        if (!store_.dirty(entry.original_path) && !SecretsGuard::is_redacted(repo)) {
-            Reporter::ok("unchanged: " + entry.original_path);
+        if (!store_.dirty(entry.relative_path) && !SecretsGuard::is_redacted(repo)) {
+            Reporter::ok("unchanged: ~/" + entry.relative_path);
             continue;
         }
 
-        Reporter::info("sync: " + entry.original_path);
-        strategy_->deploy(entry.original_path);
+        Reporter::info("sync: ~/" + entry.relative_path);
+        strategy_->deploy(entry.relative_path);
         ++copied;
     }
 
