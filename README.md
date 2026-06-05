@@ -1,85 +1,115 @@
 # dotrix
 
-> Single-binary dotfiles manager.  Modern C++20, command-pattern architecture.
+> Single-binary dotfiles manager.  Modern C++20.  Config-only, no bloat.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/huachaowu/dotrix.git ~/dotrix
-cd ~/dotrix
-xmake                              # build
+git clone https://github.com/huachaowu/dotrix.git && cd dotrix
+xmake                              # one-shot build
 
-# Start managing configs
-./dotrix ~/.zshrc                  # add a file
-./dotrix ~/.config/nvim/           # add a directory
-
-# New machine: deploy everything
-git clone <your-dotfiles-repo> ~/.dotfiles
-./dotrix sync                      # deploys with auto-backup
+# Start tracking
+./dotrix ~/.zshrc                  # single file
+./dotrix ~/.config/nvim/           # entire directory (recursive)
+./dotrix ~/.zshrc ~/.tmux.conf    # multiple at once
 ```
 
 ## Commands
 
 ```
-dotrix add     <file...>    Start tracking config files
+dotrix add     <file...>    Start tracking (auto-redacts secrets)
 dotrix remove  <file...>    Stop tracking (alias: rm)
-dotrix capture              Save live changes → repo + git commit
+dotrix capture              Save live changes → repo + commit
 dotrix sync                 Deploy repo → live (backs up existing files)
+dotrix scan                 Scan managed files for secrets
 dotrix list                 Show managed files
 dotrix status               Show files with uncommitted changes
+dotrix help
 ```
+
+No args = `dotrix sync`.
 
 ## Workflow
 
 ```
-dotrix add ~/.zshrc          # Start managing
-vim ~/.zshrc                 # Edit as usual
-dotrix status                # See what changed
-dotrix capture               # Save changes → repo + commit
+# ---- Set up ----
+dotrix ~/.zshrc ~/.gitconfig ~/.tmux.conf ~/.config/nvim/
 
-# On a new machine:
+# ---- Daily use ----
+vim ~/.zshrc                         # edit configs normally
+dotrix status                        # see what changed
+dotrix capture                       # save → repo, git commit
+
+# ---- Stop tracking ----
+dotrix rm ~/.config/nvim
+
+# ---- New machine ----
 git clone <repo> ~/.dotfiles
-dotrix sync                  # Deploy all configs (backs up existing files)
+dotrix sync                          # deploys all configs, backs up existing files
 ```
 
-## How it works
+## Secret handling
 
+`dotrix add` automatically detects API keys / tokens and redacts them before
+storing:
+
+```bash
+dotrix ~/.claude/settings.json
+  [warn] secrets in: ~/.claude/settings.json
+  [ ok ] redacted 1 secret(s), added  # repo: __DOTRIX_REDACTED__
+  [warn] 1 value(s) redacted — live files untouched
 ```
-dotrix add ~/.zshrc
-  → copies to ~/.dotfiles/.zshrc
-  → appends to .dotrix/manifest
-  → git commit "dotrix: add /home/user/.zshrc"
 
+`dotrix sync` skips redacted files (protects your real keys):
+
+```bash
 dotrix sync
-  → reads .dotrix/manifest
-  → for each file: if live file exists & differs → backup to .dotrix.bak
-  → copies repo → live
+  [warn] redacted, skipping: ~/.claude/settings.json (use --force to overwrite)
+```
 
-dotrix capture
-  → compares live vs repo
-  → copies changed files live → repo
-  → git commit
+Detected patterns: `sk-*`, `ghp_*`, `xoxb-*`, `AKIA*`, JWT headers,
+`token =`, `api_key =`, `secret =`, `password =` with non-trivial values.
+
+## Paths are portable
+
+Manifest stores paths relative to `$HOME` (`.zshrc`, not `/home/user/.zshrc`).
+Old absolute paths are auto-migrated on read.
+
+```
+Machine A (huachaowu):   .zshrc  →  /home/huachaowu/.zshrc
+Machine B (bob):         .zshrc  →  /home/bob/.zshrc
 ```
 
 ## Build
 
 ```bash
-xmake          # debug:   xmake f -m debug && xmake
+xmake                          # release build  (binary: ./dotrix)
+xmake f -m debug && xmake      # debug build
 ```
 
-Requires: C++20 compiler, xmake.
+Requires: C++20 compiler, xmake.  Binary ~180KB stripped.
 
 ## Architecture
 
 ```
 src/
-├── main.cpp                 # Entry + Dispatcher (command registry)
-├── core/    config, types   # Configuration & common types
-├── ui/      reporter        # Output formatting
-├── util/    fs, process     # Filesystem & subprocess helpers
-├── repo/    store, manifest, git   # Data layer
-├── sync/    strategy        # ISyncStrategy → CopySyncStrategy
-└── commands/ add, remove, capture, sync, list, status
+├── main.cpp                     # Entry + Dispatcher (command registry)
+├── core/     config, types      # Config resolver, common types
+├── ui/       reporter           # Output formatting
+├── util/     fs, process        # Filesystem & subprocess
+├── repo/     store, manifest, git   # Data layer
+├── guard/    secrets            # API-key detection & redaction
+├── sync/     strategy           # ISyncStrategy → CopySyncStrategy
+└── commands/ add, remove, capture, sync, list, status, scan
 ```
 
 Add a command: implement `ICommand`, register in `Dispatcher` — one line.
+
+## CI / Release
+
+Push a tag to trigger multi-arch build + GitHub Release:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+# → linux/amd64 + linux/arm64 tarballs published
+```
