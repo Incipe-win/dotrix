@@ -8,6 +8,7 @@
 #include "commands/list.hpp"
 #include "commands/status.hpp"
 #include "commands/remove.hpp"
+#include "commands/capture.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -37,6 +38,9 @@ public:
         // remove
         registry_["remove"] = std::make_unique<RemoveCommand>(store, manifest, git);
         registry_["rm"]    = std::make_unique<RemoveCommand>(store, manifest, git);
+
+        // capture
+        registry_["capture"] = std::make_unique<CaptureCommand>(store, manifest, git);
     }
 
     /// Dispatch a command name; returns nullptr if unknown.

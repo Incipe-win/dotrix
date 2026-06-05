@@ -21,6 +21,9 @@ public:
     /// Copy from live -> repo (store a file/dir).
     void store(const std::string& original) const;
 
+    /// Alias for store (semantic: live -> repo).
+    void capture(const std::string& original) const { store(original); }
+
     /// Copy from repo -> live (deploy a file/dir).
     void deploy(const std::string& original) const;
 
