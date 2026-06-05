@@ -1,0 +1,13 @@
+# Build
+build/
+.xmake/
+
+# Binary (build from source: xmake)
+dotrix
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

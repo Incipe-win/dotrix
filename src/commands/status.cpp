@@ -1,0 +1,29 @@
+#include "status.hpp"
+#include "ui/reporter.hpp"
+#include <iostream>
+
+namespace dotrix {
+
+int StatusCommand::execute(const std::vector<std::string>& /*args*/) {
+    auto m = manifest_.read();
+    int dirty = 0;
+
+    for (auto& e : m) {
+        auto live = store_.live_path(e.original_path);
+        auto repo = store_.repo_path(e.original_path);
+
+        if (!fs::exists(live)) {
+            std::cout << "  D  " << e.original_path << "  (missing)\n"; ++dirty;
+        } else if (!fs::exists(repo)) {
+            std::cout << "  A  " << e.original_path << "  (not in repo)\n"; ++dirty;
+        } else if (store_.dirty(e.original_path)) {
+            std::cout << "  M  " << e.original_path << "  (modified)\n"; ++dirty;
+        }
+    }
+
+    if (dirty == 0) Reporter::ok("clean");
+    else Reporter::warn(std::to_string(dirty) + " file(s) differ");
+    return dirty > 0 ? 1 : 0;
+}
+
+} // namespace dotrix
