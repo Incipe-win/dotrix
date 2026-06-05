@@ -1,5 +1,6 @@
 #include "store.hpp"
 #include "util/fs.hpp"
+#include "ui/reporter.hpp"
 #include <filesystem>
 
 namespace dotrix {
@@ -27,6 +28,14 @@ void Store::deploy(const std::string& original) const {
     auto src = repo_path(original);
     auto dst = live_path(original);
     if (!fs::exists(src)) return;
+
+    // Back up existing live file before overwriting
+    if (fs::exists(dst) && util::files_differ(src, dst)) {
+        auto bak = fs::path(dst.string() + ".dotrix.bak");
+        fs::rename(dst, bak);
+        Reporter::warn("backup: " + original + " -> " + original + ".dotrix.bak");
+    }
+
     util::copy_tree(src, dst);
 }
 
