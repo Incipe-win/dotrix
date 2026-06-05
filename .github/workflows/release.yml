@@ -1,0 +1,64 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            cross: ''
+          - arch: arm64
+            cross: g++-aarch64-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ ${{ matrix.cross }}
+
+      - name: Build
+        run: |
+          xmake f -m release -a ${{ matrix.arch }}
+          xmake
+
+      - name: Package
+        run: tar -czf dotrix-linux-${{ matrix.arch }}.tar.gz dotrix
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotrix-linux-${{ matrix.arch }}
+          path: dotrix-linux-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dotrix-linux-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
