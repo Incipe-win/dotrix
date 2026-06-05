@@ -11,6 +11,7 @@
 #include "commands/capture.hpp"
 #include "commands/scan.hpp"
 #include "commands/check.hpp"
+#include "commands/setup.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -49,6 +50,9 @@ public:
 
         // check
         registry_["check"] = std::make_unique<CheckCommand>(manifest);
+
+        // setup
+        registry_["setup"] = std::make_unique<SetupCommand>();
     }
 
     /// Dispatch a command name; returns nullptr if unknown.
