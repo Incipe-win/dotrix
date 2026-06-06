@@ -3,7 +3,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cctype>
-#include <regex>
+#include <map>
 
 namespace dotrix {
 
@@ -22,17 +22,43 @@ static std::string truncate(const std::string& s, size_t n = 60) {
     return s.substr(0, n) + "...";
 }
 
+/// Extract the "key" from a line like `KEY = value` or `"key": value`
+static std::string extract_key(const std::string& line) {
+    auto trimmed = line;
+    trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+    if (trimmed.empty()) return "";
+
+    // JSON style: "key": value
+    if (trimmed[0] == '"') {
+        auto end = trimmed.find('"', 1);
+        if (end != std::string::npos) return trimmed.substr(1, end - 1);
+    }
+
+    // KEY=VALUE style
+    auto sep = trimmed.find('=');
+    if (sep == std::string::npos) sep = trimmed.find(':');
+    if (sep != std::string::npos) {
+        auto key = trimmed.substr(0, sep);
+        // Trim trailing whitespace from key
+        while (!key.empty() && (key.back() == ' ' || key.back() == '\t'))
+            key.pop_back();
+        return key;
+    }
+
+    return "";
+}
+
 // ---- Pattern matchers ----
 
 bool SecretsGuard::looks_like_key(const std::string& line) {
     static const std::vector<std::string> prefixes = {
-        "sk-", "pk-",                   // Stripe / OpenAI / Claude
-        "AKIA",                          // AWS access key
-        "ghp_", "gho_", "ghu_",         // GitHub tokens
-        "github_pat_",                   // GitHub fine-grained
-        "xoxb-", "xoxp-",               // Slack
-        "sk-ant-",                       // Anthropic
-        "eyJ",                           // JWT header
+        "sk-", "pk-",
+        "AKIA",
+        "ghp_", "gho_", "ghu_",
+        "github_pat_",
+        "xoxb-", "xoxp-",
+        "sk-ant-",
+        "eyJ",
     };
     for (auto& p : prefixes)
         if (line.find(p) != std::string::npos) return true;
@@ -154,9 +180,6 @@ bool SecretsGuard::is_redacted(const fs::path& path) {
 // ---- Redaction ----
 
 std::string SecretsGuard::redact_line(const std::string& line) {
-    // Strategy: find the key-value separator (= or :), replace the value
-    // with the redacted placeholder, preserving quotes and trailing comma.
-
     auto trimmed = line;
     trimmed.erase(0, trimmed.find_first_not_of(" \t"));
     if (trimmed.empty()) return "";
@@ -165,20 +188,16 @@ std::string SecretsGuard::redact_line(const std::string& line) {
     if (!looks_like_key(line) && !looks_like_token(line) && !looks_like_password(line))
         return "";
 
-    // Find separator position in original line (preserving indentation)
     auto sep_pos = line.find('=');
     if (sep_pos == std::string::npos) sep_pos = line.find(':');
     if (sep_pos == std::string::npos) return "";
 
-    // Find trailing comma / brace / comment
     auto after = line.find_first_of(",;#", sep_pos + 1);
     auto end = (after != std::string::npos) ? after : line.size();
 
-    // Build redacted line: keep everything before value, replace value
-    auto prefix = line.substr(0, sep_pos + 1);     // "  key ="
-    auto suffix = (after != std::string::npos) ? line.substr(after) : ""; // trailing ", {"
+    auto prefix = line.substr(0, sep_pos + 1);
+    auto suffix = (after != std::string::npos) ? line.substr(after) : "";
 
-    // Detect quote style
     auto val_start = line.find_first_not_of(" \t", sep_pos + 1);
     bool quoted = (val_start != std::string::npos && line[val_start] == '"');
 
@@ -207,6 +226,51 @@ int SecretsGuard::redact_file(const fs::path& src, const fs::path& dst) {
     }
 
     return count;
+}
+
+// ---- Merge ----
+
+int SecretsGuard::merge_file(const fs::path& repo, const fs::path& live) {
+    if (!fs::exists(repo)) return 0;
+
+    // Build key → line map from live file
+    std::map<std::string, std::string> live_by_key;
+    if (fs::exists(live)) {
+        std::ifstream in(live);
+        std::string line;
+        while (std::getline(in, line)) {
+            auto key = extract_key(line);
+            if (!key.empty()) live_by_key[key] = line;
+        }
+    }
+
+    // Read repo, merge, write to live
+    std::ifstream repo_in(repo);
+    std::vector<std::string> merged;
+    std::string line;
+    int preserved = 0;
+
+    while (std::getline(repo_in, line)) {
+        if (line.find(REDACTED_PLACEHOLDER) != std::string::npos) {
+            auto key = extract_key(line);
+            auto it = live_by_key.find(key);
+            if (it != live_by_key.end()) {
+                // Use live value (real secret)
+                merged.push_back(it->second);
+                ++preserved;
+                continue;
+            }
+        }
+        // Use repo line (non-secret, or new secret placeholder)
+        merged.push_back(line);
+    }
+
+    // Write merged content
+    fs::create_directories(live.parent_path());
+    std::ofstream out(live, std::ios::trunc);
+    for (auto& l : merged) out << l << "\n";
+
+    return preserved;
 }
 
 } // namespace dotrix

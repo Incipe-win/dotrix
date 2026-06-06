@@ -38,6 +38,12 @@ public:
     /// write to `dst`.  Returns number of lines redacted.
     static int redact_file(const fs::path& src, const fs::path& dst);
 
+    /// Merge repo → live: write repo content to live, but preserve
+    /// real secret values from the existing live file where repo has
+    /// __DOTRIX_REDACTED__ placeholders.
+    /// Returns number of secrets preserved from live.
+    static int merge_file(const fs::path& repo, const fs::path& live);
+
 private:
     static void check_line(const std::string& line, int lineno,
                            std::vector<Finding>& out);

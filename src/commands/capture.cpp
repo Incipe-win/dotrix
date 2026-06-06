@@ -1,5 +1,6 @@
 #include "capture.hpp"
 #include "ui/reporter.hpp"
+#include "guard/secrets.hpp"
 #include <sstream>
 
 namespace dotrix {
@@ -24,7 +25,17 @@ int CaptureCommand::execute(const std::vector<std::string>& /*args*/) {
             continue;
 
         Reporter::info("capture: ~/" + entry.relative_path);
-        store_.store(entry.relative_path);
+
+        // Redact secrets before storing to repo
+        auto src = store_.live_path(entry.relative_path);
+        auto dst = store_.repo_path(entry.relative_path);
+        auto findings = SecretsGuard::scan_dir(src);
+        if (!findings.empty()) {
+            fs::create_directories(dst.parent_path());
+            SecretsGuard::redact_file(src, dst);
+        } else {
+            store_.store(entry.relative_path);
+        }
         updated.push_back(entry.relative_path);
     }
 

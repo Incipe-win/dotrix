@@ -15,7 +15,7 @@ int SyncCommand::execute(const std::vector<std::string>& args) {
         return 0;
     }
 
-    int copied = 0, skipped = 0;
+    int copied = 0, merged = 0, skipped = 0;
     for (auto& entry : manifest) {
         auto repo = store_.repo_path(entry.relative_path);
 
@@ -24,19 +24,34 @@ int SyncCommand::execute(const std::vector<std::string>& args) {
             continue;
         }
 
-        if (!force && SecretsGuard::is_redacted(repo)) {
-            auto live = store_.live_path(entry.relative_path);
-            if (fs::exists(live)) {
-                Reporter::warn("redacted, skipping: ~/" + entry.relative_path
-                               + " (use --force to overwrite)");
-                ++skipped;
+        auto live = store_.live_path(entry.relative_path);
+
+        // If repo has redacted placeholders, merge: new content from repo,
+        // real secrets from live.
+        if (SecretsGuard::is_redacted(repo)) {
+            if (!fs::exists(live)) {
+                // New machine — deploy template
+                Reporter::info("deploying template: ~/" + entry.relative_path
+                               + " (fill in __DOTRIX_REDACTED__ values)");
+                strategy_->deploy(entry.relative_path);
+                ++copied;
                 continue;
             }
-            Reporter::info("deploying template: ~/" + entry.relative_path
-                           + " (fill in redacted values)");
+
+            // Live exists — merge: repo content + live secrets
+            int n = SecretsGuard::merge_file(repo, live);
+            if (n > 0) {
+                Reporter::ok("merged: ~/" + entry.relative_path
+                             + " (" + std::to_string(n) + " secrets preserved)");
+                ++merged;
+            } else {
+                Reporter::ok("unchanged: ~/" + entry.relative_path);
+            }
+            continue;
         }
 
-        if (!store_.dirty(entry.relative_path) && !SecretsGuard::is_redacted(repo)) {
+        // Non-redacted file — normal sync
+        if (!force && !store_.dirty(entry.relative_path)) {
             Reporter::ok("unchanged: ~/" + entry.relative_path);
             continue;
         }
@@ -46,9 +61,11 @@ int SyncCommand::execute(const std::vector<std::string>& args) {
         ++copied;
     }
 
-    if (copied) Reporter::ok(std::to_string(copied) + " file(s) synced");
-    if (skipped) Reporter::warn(std::to_string(skipped) + " redacted file(s) skipped (use --force)");
-    if (copied == 0 && skipped == 0) Reporter::ok("everything up to date");
+    if (copied)  Reporter::ok(std::to_string(copied) + " file(s) synced");
+    if (merged)  Reporter::ok(std::to_string(merged) + " file(s) merged (secrets preserved)");
+    if (skipped) Reporter::warn(std::to_string(skipped) + " file(s) skipped");
+    if (copied == 0 && merged == 0 && skipped == 0)
+        Reporter::ok("everything up to date");
     return 0;
 }
 
