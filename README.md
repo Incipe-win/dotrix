@@ -21,6 +21,41 @@ xmake                              # one-shot build
 ./dotrix ~/.config/nvim/           # entire directory
 ```
 
+## New machine setup
+
+Bare-metal server — no zsh, no nothing.
+
+```bash
+# 1. System prerequisites
+sudo apt install -y zsh git curl unzip build-essential
+
+# 2. Build dotrix
+git clone https://github.com/Incipe-win/dotrix.git ~/dotrix
+cd ~/dotrix && xmake
+
+# 3. Clone your config repo
+git clone https://github.com/Incipe-win/.dotfiles.git ~/.dotfiles
+
+# 4. Set GitHub token (for downloading tool binaries)
+./dotrix config github_token ghp_xxx
+
+# 5. Install dotrix itself requires installing zsh + helpers
+./dotrix setup --pick    # check: zsh, ohmyzsh, ohmyposh, fzf
+
+# 6. Deploy all config files (auto-merge secrets)
+./dotrix sync
+
+# 7. Install dev tools
+./dotrix setup --pick    # check: nvim, rg, fd, go, rust, node, etc.
+
+# 8. Switch to zsh
+chsh -s $(which zsh)
+exec zsh
+```
+
+> **Step 5 & 7 are the same command.**  First pass installs shell basics so
+> `.zshrc` can source them.  Second pass installs everything else.
+
 ## Commands
 
 ```
