@@ -1,109 +1,114 @@
 # dotrix
 
-> Single-binary dotfiles manager.  Modern C++20.  Config-only, no bloat.
+> Single-binary dotfiles manager. Modern C++20, automatic secret redaction,
+> smart sync with live-secret preservation.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/huachaowu/dotrix.git && cd dotrix
+git clone https://github.com/Incipe-win/dotrix.git && cd dotrix
 xmake                              # one-shot build
 
 # Start tracking
 ./dotrix ~/.zshrc                  # single file
-./dotrix ~/.config/nvim/           # entire directory (recursive)
-./dotrix ~/.zshrc ~/.tmux.conf    # multiple at once
+./dotrix ~/.config/nvim/           # entire directory
 ```
 
 ## Commands
 
 ```
-dotrix add     <file...>    Start tracking (auto-redacts secrets)
-dotrix remove  <file...>    Stop tracking (alias: rm)
-dotrix capture              Save live changes → repo + commit
-dotrix sync                 Deploy repo → live (backs up existing files)
-dotrix scan                 Scan managed files for secrets
-dotrix list                 Show managed files
-dotrix status               Show files with uncommitted changes
+dotrix <file...>            add — start tracking (auto-redacts secrets)
+dotrix add     <file...>    add — explicit form
+dotrix remove  <file...>    stop tracking (alias: rm)
+dotrix capture              save live changes → repo (auto-redacts)
+dotrix sync                 deploy repo → live (smart-merge secrets)
+dotrix list                 show managed files
+dotrix status               show files with uncommitted changes
+dotrix scan                 scan managed files for secrets
+dotrix check                show which tools are installed / missing
+dotrix setup                dev-tool installer with TUI (--pick)
+dotrix setup --add          add custom install recipe
+dotrix config               manage dotrix settings (token, paths)
 dotrix help
 ```
 
 No args = `dotrix sync`.
 
-## Workflow
-
-```
-# ---- Set up ----
-dotrix ~/.zshrc ~/.gitconfig ~/.tmux.conf ~/.config/nvim/
-
-# ---- Daily use ----
-vim ~/.zshrc                         # edit configs normally
-dotrix status                        # see what changed
-dotrix capture                       # save → repo, git commit
-
-# ---- Stop tracking ----
-dotrix rm ~/.config/nvim
-
-# ---- New machine ----
-git clone <repo> ~/.dotfiles
-dotrix sync                          # deploys all configs, backs up existing files
-```
-
 ## Secret handling
 
-`dotrix add` automatically detects API keys / tokens and redacts them before
-storing:
+API keys and tokens are detected and automatically replaced with
+`__DOTRIX_REDACTED__` when adding or capturing files.
 
-```bash
-dotrix ~/.claude/settings.json
-  [warn] secrets in: ~/.claude/settings.json
-  [ ok ] redacted 1 secret(s), added  # repo: __DOTRIX_REDACTED__
-  [warn] 1 value(s) redacted — live files untouched
+On sync, secrets are **never** overwritten — the repo's new config is merged
+with the live file's real keys:
+
 ```
-
-`dotrix sync` skips redacted files (protects your real keys):
-
-```bash
-dotrix sync
-  [warn] redacted, skipping: ~/.claude/settings.json (use --force to overwrite)
+repo (new):    OCO_API_KEY= __DOTRIX_REDACTED__    live (old):    OCO_API_KEY= sk-real-key
+               OCO_NEW_OPTION=true                                 OCO_MODEL=deepseek
+                                                  ↓ merge ↓
+               OCO_API_KEY= sk-real-key      ← preserved from live
+               OCO_NEW_OPTION=true           ← new from repo
 ```
-
-Detected patterns: `sk-*`, `ghp_*`, `xoxb-*`, `AKIA*`, JWT headers,
-`token =`, `api_key =`, `secret =`, `password =` with non-trivial values.
 
 ## Paths are portable
 
 Manifest stores paths relative to `$HOME` (`.zshrc`, not `/home/user/.zshrc`).
-Old absolute paths are auto-migrated on read.
+Old absolute paths are auto-migrated.
 
-```
-Machine A (huachaowu):   .zshrc  →  /home/huachaowu/.zshrc
-Machine B (bob):         .zshrc  →  /home/bob/.zshrc
-```
-
-## Build
+## dev-tool installer
 
 ```bash
-xmake                          # release build  (binary: ./dotrix)
-xmake f -m debug && xmake      # debug build
+dotrix setup                              # list all 42 tools
+dotrix setup --pick                       # interactive TUI
+dotrix setup --run nvim go rust           # install specific
+dotrix setup --add                        # add custom recipe
+dotrix setup --rm mytool                  # remove custom recipe
 ```
 
-Requires: C++20 compiler, xmake.  Binary ~180KB stripped.
+All installs are user-local (`~/.local/bin`). GitHub API calls use the
+token from `dotrix config`.
+
+## Configuration
+
+```
+~/.config/dotrix/config.json      dotrix settings (token, repo path)
+~/.dotfiles/.dotrix/recipes.json  tool install recipes
+~/.dotfiles/.dotrix/manifest.json managed file list
+```
+
+All three are auto-tracked. `config.json` secrets are redacted in the repo.
+
+```bash
+dotrix config                         # show settings
+dotrix config github_token ghp_xxx    # set GitHub token
+dotrix config dotfiles_root ~/.dotfiles
+```
 
 ## Architecture
 
 ```
 src/
-├── main.cpp                     # Entry + Dispatcher (command registry)
-├── core/     config, types      # Config resolver, common types
-├── ui/       reporter           # Output formatting
-├── util/     fs, process        # Filesystem & subprocess
-├── repo/     store, manifest, git   # Data layer
-├── guard/    secrets            # API-key detection & redaction
-├── sync/     strategy           # ISyncStrategy → CopySyncStrategy
-└── commands/ add, remove, capture, sync, list, status, scan
+├── main.cpp                     Entry + Dispatcher + auto-track-self
+├── core/        config          Config loader (JSON)
+├── ui/          reporter        Output formatting
+├── util/        fs, process     Filesystem & subprocess
+├── repo/        store, manifest, git   Data layer (JSON manifest)
+├── guard/       secrets, toolchain     Secret detection/redaction/merge
+├── sync/        strategy        ISyncStrategy → CopySyncStrategy
+├── tui/         select          Terminal checkbox UI
+├── commands/    add, remove, capture, sync, list, status, scan,
+│               check, setup, config
+└── vendor/      json.hpp        nlohmann/json (header-only)
 ```
 
-Add a command: implement `ICommand`, register in `Dispatcher` — one line.
+## Build
+
+```bash
+xmake                          # release build  (binary: ./dotrix, ~300KB)
+xmake f -m debug && xmake      # debug build
+```
+
+Requires: C++20 compiler, xmake.
 
 ## CI / Release
 
