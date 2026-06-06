@@ -288,7 +288,7 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
         auto script = fs::temp_directory_path() / ("dotrix-setup-" + t.name + ".sh");
         {
             std::ofstream out(script);
-            out << "#!/bin/bash\nset -e\n" << t.install << "\n";
+            out << "#!/usr/bin/env bash\nset -e\n" << t.install << "\n";
         }
         fs::permissions(script, fs::perms::owner_exec, fs::perm_options::add);
         bool ok = util::run({script.string()});
