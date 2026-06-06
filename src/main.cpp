@@ -12,6 +12,8 @@
 #include "commands/scan.hpp"
 #include "commands/check.hpp"
 #include "commands/setup.hpp"
+#include "commands/config_cmd.hpp"
+#include "guard/secrets.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -24,7 +26,7 @@ namespace dotrix {
 /// then register it here.  Everything else is automatic.
 class Dispatcher {
 public:
-    Dispatcher(Store& store, ManifestManager& manifest, Git& git) {
+    Dispatcher(Store& store, ManifestManager& manifest, Git& git, Config& cfg) {
         // add
         registry_["add"] = std::make_unique<AddCommand>(store, manifest, git);
 
@@ -53,6 +55,9 @@ public:
 
         // setup
         registry_["setup"] = std::make_unique<SetupCommand>();
+
+        // config
+        registry_["config"] = std::make_unique<ConfigCommand>(cfg);
     }
 
     /// Dispatch a command name; returns nullptr if unknown.
@@ -80,6 +85,56 @@ private:
 
 } // namespace dotrix
 
+/// Auto-track dotrix's own config files on first run.
+static void auto_track_self(dotrix::Store& store, dotrix::ManifestManager& manifest,
+                            dotrix::Git& git) {
+    auto& cfg = store.config();
+    std::vector<std::string> self_files;
+
+    // config.json (~/.config/dotrix/config.json)
+    auto config_json = cfg.config_dir / "config.json";
+    if (fs::exists(config_json)) {
+        try {
+            auto rel = store.to_relative(config_json);
+            if (!manifest.contains(rel)) self_files.push_back(rel);
+        } catch (...) {}
+    }
+
+    // recipes.json (~/.dotfiles/.dotrix/recipes.json)
+    auto recipes_json = cfg.repo / ".dotrix" / "recipes.json";
+    if (fs::exists(recipes_json)) {
+        try {
+            auto rel = store.to_relative(recipes_json);
+            if (!manifest.contains(rel)) self_files.push_back(rel);
+        } catch (...) {}
+    }
+
+    if (self_files.empty()) return;
+
+    git.ensure_initialized();
+
+    dotrix::Manifest added;
+    for (auto& rel : self_files) {
+        auto src = store.live_path(rel);
+        auto dst = store.repo_path(rel);
+        fs::create_directories(dst.parent_path());
+
+        // Redact secrets in config files
+        auto findings = dotrix::SecretsGuard::scan_dir(src);
+        if (!findings.empty()) {
+            dotrix::SecretsGuard::redact_file(src, dst);
+        } else {
+            store.store(rel);
+        }
+        added.push_back({rel});
+    }
+    manifest.append(added);
+
+    std::string msg = "dotrix: auto-track self";
+    for (auto& rel : self_files) msg += " ~/" + rel;
+    git.commit(msg);
+}
+
 int main(int argc, char* argv[]) {
     using namespace dotrix;
 
@@ -88,7 +143,11 @@ int main(int argc, char* argv[]) {
     Store store(cfg);
     ManifestManager manifest(cfg);
     Git git(cfg);
-    Dispatcher dispatcher(store, manifest, git);
+
+    // Auto-track dotrix's own config files
+    auto_track_self(store, manifest, git);
+
+    Dispatcher dispatcher(store, manifest, git, cfg);
 
     // ---- Help ----
     if (argc < 2) {

@@ -20,7 +20,7 @@ public:
 
 private:
     static std::vector<Recipe> load_recipes();
-    static fs::path custom_recipes_path();
+    static fs::path recipes_path();
 
     int run_list(const std::vector<Recipe>& all);
     int run_install(const std::vector<Recipe>& all,
