@@ -14,6 +14,7 @@
 #include "commands/setup.hpp"
 #include "commands/config_cmd.hpp"
 #include "guard/secrets.hpp"
+#include <csignal>
 
 #include <iostream>
 #include <unordered_map>
@@ -135,7 +136,20 @@ static void auto_track_self(dotrix::Store& store, dotrix::ManifestManager& manif
     git.commit(msg);
 }
 
+/// Signal handler — clean exit on Ctrl+C.
+static void handle_sigint(int) {
+    // Clean up any leftover temp scripts
+    auto tmp = fs::temp_directory_path();
+    for (auto& e : fs::directory_iterator(tmp)) {
+        auto name = e.path().filename().string();
+        if (name.starts_with("dotrix-setup-") && name.ends_with(".sh"))
+            fs::remove(e.path());
+    }
+    _exit(130);
+}
+
 int main(int argc, char* argv[]) {
+    signal(SIGINT, handle_sigint);
     using namespace dotrix;
 
     // ---- Bootstrap ----

@@ -3,6 +3,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <csignal>
 #include <cstdio>
 #include <algorithm>
 
@@ -34,6 +35,15 @@ static void reset()      { std::cout << "\033[0m"; }
 static void hide_cursor(){ std::cout << "\033[?25l"; }
 static void show_cursor(){ std::cout << "\033[?25h"; }
 static void line_clear() { std::cout << "\033[2K"; }
+
+// ---- Ctrl+C handler (defined after restore/show_cursor) ----
+static volatile sig_atomic_t g_interrupted = 0;
+
+static void sigint_handler(int) {
+    restore();
+    show_cursor();
+    _exit(130);
+}
 
 static int term_width() {
     struct winsize w;
@@ -115,6 +125,10 @@ std::vector<int> select(std::vector<Item>& items, const std::string& title) {
     if (items.empty()) return {};
 
     int cursor_idx = 0;
+
+    // Catch Ctrl+C → restore terminal before exit
+    auto old_sigint = signal(SIGINT, sigint_handler);
+
     raw_mode();
     hide_cursor();
 
@@ -127,7 +141,10 @@ std::vector<int> select(std::vector<Item>& items, const std::string& title) {
         draw(items, cursor_idx, title);
 
         char c;
-        if (read(STDIN_FILENO, &c, 1) != 1) continue;
+        if (read(STDIN_FILENO, &c, 1) != 1) {
+            if (g_interrupted) { signal(SIGINT, old_sigint); return {}; }
+            continue;
+        }
 
         if (c == 'q' || c == 'Q' || c == '\033') {
             // ESC — check for arrow key sequences
@@ -163,6 +180,7 @@ std::vector<int> select(std::vector<Item>& items, const std::string& title) {
 
     restore();
     show_cursor();
+    signal(SIGINT, old_sigint);  // restore default handler
     std::cout << "\n";
 
     // Return indices of checked items
