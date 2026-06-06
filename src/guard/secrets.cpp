@@ -233,6 +233,13 @@ int SecretsGuard::redact_file(const fs::path& src, const fs::path& dst) {
 int SecretsGuard::merge_file(const fs::path& repo, const fs::path& live) {
     if (!fs::exists(repo)) return 0;
 
+    // Back up existing live file before modifying
+    if (fs::exists(live)) {
+        auto bak = fs::path(live.string() + ".dotrix.bak");
+        fs::copy_file(live, bak, fs::copy_options::overwrite_existing);
+        Reporter::warn("backup: " + live.string() + " -> " + bak.string());
+    }
+
     // Build key → line map from live file
     std::map<std::string, std::string> live_by_key;
     if (fs::exists(live)) {
