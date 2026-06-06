@@ -3,13 +3,20 @@
 > Single-binary dotfiles manager. Modern C++20, automatic secret redaction,
 > smart sync with live-secret preservation.
 
+Two repos:
+
+| Repo | Purpose |
+|------|---------|
+| [Incipe-win/dotrix](https://github.com/Incipe-win/dotrix) | The tool itself (this repo) |
+| [Incipe-win/.dotfiles](https://github.com/Incipe-win/.dotfiles) | My personal config files managed by dotrix |
+
 ## Quick start
 
 ```bash
 git clone https://github.com/Incipe-win/dotrix.git && cd dotrix
 xmake                              # one-shot build
 
-# Start tracking
+# Start tracking your own configs
 ./dotrix ~/.zshrc                  # single file
 ./dotrix ~/.config/nvim/           # entire directory
 ```
