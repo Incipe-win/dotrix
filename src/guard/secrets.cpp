@@ -233,13 +233,6 @@ int SecretsGuard::redact_file(const fs::path& src, const fs::path& dst) {
 int SecretsGuard::merge_file(const fs::path& repo, const fs::path& live) {
     if (!fs::exists(repo)) return 0;
 
-    // Back up existing live file before modifying
-    if (fs::exists(live)) {
-        auto bak = fs::path(live.string() + ".dotrix.bak");
-        fs::copy_file(live, bak, fs::copy_options::overwrite_existing);
-        Reporter::warn("backup: " + live.string() + " -> " + bak.string());
-    }
-
     // Build key → line map from live file
     std::map<std::string, std::string> live_by_key;
     if (fs::exists(live)) {
@@ -251,7 +244,7 @@ int SecretsGuard::merge_file(const fs::path& repo, const fs::path& live) {
         }
     }
 
-    // Read repo, merge, write to live
+    // Read repo, merge secrets from live
     std::ifstream repo_in(repo);
     std::vector<std::string> merged;
     std::string line;
@@ -262,17 +255,30 @@ int SecretsGuard::merge_file(const fs::path& repo, const fs::path& live) {
             auto key = extract_key(line);
             auto it = live_by_key.find(key);
             if (it != live_by_key.end()) {
-                // Use live value (real secret)
                 merged.push_back(it->second);
                 ++preserved;
                 continue;
             }
         }
-        // Use repo line (non-secret, or new secret placeholder)
         merged.push_back(line);
     }
 
-    // Write merged content
+    // Check if anything actually changed
+    if (fs::exists(live)) {
+        std::ifstream old_in(live);
+        std::vector<std::string> old_lines;
+        std::string ol;
+        while (std::getline(old_in, ol)) old_lines.push_back(ol);
+        if (old_lines == merged) return 0;  // no change, skip
+    }
+
+    // Back up + write
+    if (fs::exists(live)) {
+        auto bak = fs::path(live.string() + ".dotrix.bak");
+        fs::copy_file(live, bak, fs::copy_options::overwrite_existing);
+        Reporter::warn("backup: " + live.string() + " -> " + bak.string());
+    }
+
     fs::create_directories(live.parent_path());
     std::ofstream out(live, std::ios::trunc);
     for (auto& l : merged) out << l << "\n";

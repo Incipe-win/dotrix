@@ -101,14 +101,8 @@ static void auto_track_self(dotrix::Store& store, dotrix::ManifestManager& manif
         } catch (...) {}
     }
 
-    // recipes.json (~/.dotfiles/.dotrix/recipes.json)
-    auto recipes_json = cfg.repo / ".dotrix" / "recipes.json";
-    if (fs::exists(recipes_json)) {
-        try {
-            auto rel = store.to_relative(recipes_json);
-            if (!manifest.contains(rel)) self_files.push_back(rel);
-        } catch (...) {}
-    }
+    // recipes.json is already inside the dotfiles repo — no need to track
+    // Manifest is repo-internal too — not tracked
 
     if (self_files.empty()) return;
 
