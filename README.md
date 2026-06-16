@@ -145,12 +145,18 @@ src/
 
 ## Build
 
+**Option 1: Using xmake** (recommended)
 ```bash
 xmake                          # release build  (binary: ./dotrix, ~300KB)
 xmake f -m debug && xmake      # debug build
 ```
 
-Requires: C++20 compiler, xmake.
+**Option 2: Using g++ directly** (no xmake required)
+```bash
+g++ -std=c++20 -O2 -o dotrix $(find src -name "*.cpp") -Isrc -Isrc/vendor -lstdc++fs -s
+```
+
+Requires: C++20 compiler (g++ 10+), optional: xmake.
 
 ## CI / Release
 
