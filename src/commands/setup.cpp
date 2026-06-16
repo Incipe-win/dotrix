@@ -111,7 +111,8 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
 
     // Load config for GITHUB_TOKEN
     auto dotrix_cfg = Config::load();
-    if (!dotrix_cfg.github_token.empty()) {
+    if (!dotrix_cfg.github_token.empty() &&
+        dotrix_cfg.github_token.find("__DOTRIX_REDACTED__") == std::string::npos) {
         setenv("GITHUB_TOKEN", dotrix_cfg.github_token.c_str(), 1);
     }
 
@@ -147,7 +148,7 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
         auto script = fs::temp_directory_path() / ("dotrix-setup-" + t.name + ".sh");
         {
             std::ofstream out(script);
-            out << "#!/usr/bin/env bash\nset -e\n" << t.install << "\n";
+            out << "#!/usr/bin/env bash\nset -ex\n" << t.install << "\n";
         }
         fs::permissions(script, fs::perms::owner_exec, fs::perm_options::add);
         bool ok = util::run({script.string()});
