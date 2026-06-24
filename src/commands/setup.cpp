@@ -214,7 +214,20 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
                         + "  " + t.name + " installed");
             ++installed_now;
         } else {
-            Reporter::error(t.name + " failed — log: " + log_path);
+            Reporter::error(t.name + " failed:");
+            std::ifstream lf(log_path);
+            if (lf.is_open()) {
+                std::string content((std::istreambuf_iterator<char>(lf)),
+                                     std::istreambuf_iterator<char>());
+                // Show last 15 lines
+                int lines = 0; size_t p = content.size();
+                while (p > 0 && lines < 15) {
+                    p = content.rfind('\n', p - 1);
+                    if (p == std::string::npos) { p = 0; break; }
+                    lines++;
+                }
+                std::cerr << content.substr(p) << "\n";
+            }
         }
     }
 
@@ -316,7 +329,8 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         });
     };
 
-    // ---- App ----
+    // ---- App (scoped so ~App clears screen BEFORE we print logs) ----
+    {
     App app;
     app.on_render([&](Screen& g, Key key, Theme& theme) {
         int w = g.width(), h = g.height();
@@ -528,8 +542,10 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         worker.join();
         worker_started = false;
     }
+    } // ~App runs here — screen cleared, terminal restored
 
-    // Print final summary + failure logs to stderr
+    // Print final summary + failure logs to stderr (now safe from screen clear)
+    if (install_ok_count > 0)
     if (install_ok_count > 0)
         Reporter::ok(std::to_string(install_ok_count) + " tool(s) installed");
     if (skipped_sudo > 0)
