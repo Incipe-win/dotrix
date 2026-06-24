@@ -370,7 +370,7 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                         if (items[i].needs_sudo) { skipped_sudo++; continue; }
                         tasks.push_back({i, items[i].name, TaskState::Pending, {}, {}});
                     }
-                    if (tasks.empty()) { app.quit(); break; }
+                    if (tasks.empty()) { phase = Results; break; }
                     // Skip system tools (no install script)
                     for (auto it = tasks.begin(); it != tasks.end(); ) {
                         if (all[it->recipe_idx].install.empty()) {
@@ -378,7 +378,7 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                             it = tasks.erase(it);
                         } else ++it;
                     }
-                    if (tasks.empty()) { app.quit(); break; }
+                    if (tasks.empty()) { phase = Results; break; }
                     phase = Installing;
                     break;
                 }
@@ -593,8 +593,13 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
             Style warn_s; warn_s.fg = theme.warning;
             Style text_s; text_s.fg = theme.text;
 
-            g.text(r, c, "✓ " + std::to_string(install_ok_count) + " installed", ok_s);
-            r++;
+            if (install_ok_count > 0 || install_fail_count > 0) {
+                g.text(r, c, "✓ " + std::to_string(install_ok_count) + " installed", ok_s);
+                r++;
+            } else {
+                g.text(r, c, "No tools were installed", Style{theme.text_dim});
+                r++;
+            }
 
             // List failed tools with cursor
             std::vector<int> failed_indices;
@@ -627,7 +632,10 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                 r++;
             }
             r += 2;
-            g.text(r, c, "Press Enter to view log, any other key to exit", Style{theme.text_dim});
+            if (!failed_indices.empty())
+                g.text(r, c, "Press Enter to view log, any other key to exit", Style{theme.text_dim});
+            else
+                g.text(r, c, "Press any key to exit", Style{theme.text_dim});
 
             if (key != Key_none && key != Key_up && key != Key_down &&
                 key != Key_j && key != Key_k && key != Key_enter && key != Key_space) {
