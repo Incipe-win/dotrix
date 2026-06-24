@@ -4,7 +4,7 @@ set_languages("c++20")
 target("dotrix")
     set_kind("binary")
     add_files("src/**.cpp")
-    add_includedirs("src", "src/vendor")
+    add_includedirs("src", "src/vendor", "../fuibase/include")
     set_targetdir("$(projectdir)")
 
     if is_plat("linux") then add_links("stdc++fs") end

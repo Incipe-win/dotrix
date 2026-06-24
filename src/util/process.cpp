@@ -10,6 +10,13 @@ bool run(const std::vector<std::string>& cmd) {
     return system(line.c_str()) == 0;
 }
 
+bool run_silent(const std::vector<std::string>& cmd) {
+    std::string line;
+    for (auto& a : cmd) line += a + " ";
+    line += " >/dev/null 2>&1";
+    return system(line.c_str()) == 0;
+}
+
 std::string capture(const std::vector<std::string>& cmd) {
     std::string line, out;
     for (auto& a : cmd) line += a + " ";

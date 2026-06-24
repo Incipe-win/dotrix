@@ -7,8 +7,11 @@ namespace fs = std::filesystem;
 
 namespace dotrix::util {
 
-/// Run a command; returns true on success.
+/// Run a command; returns true on success (stdout passes through).
 bool run(const std::vector<std::string>& cmd);
+
+/// Run silently — output goes to /dev/null. Returns true on success.
+bool run_silent(const std::vector<std::string>& cmd);
 
 /// Run and capture stdout.  Returns empty string on failure.
 std::string capture(const std::vector<std::string>& cmd);

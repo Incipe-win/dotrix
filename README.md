@@ -137,10 +137,19 @@ src/
 ├── repo/        store, manifest, git   Data layer (JSON manifest)
 ├── guard/       secrets, toolchain     Secret detection/redaction/merge
 ├── sync/        strategy        ISyncStrategy → CopySyncStrategy
-├── tui/         select          Terminal checkbox UI
 ├── commands/    add, remove, capture, sync, list, status, scan,
 │               check, setup, config
 └── vendor/      json.hpp        nlohmann/json (header-only)
+
+External:  fuibase/               Modern C++20 immediate-mode TUI framework
+```
+
+## Dependencies
+
+- [**fuibase**](https://github.com/Incipe-win/fuibase) — C++20 TUI framework (header-only)
+
+```bash
+git clone https://github.com/Incipe-win/fuibase.git ../fuibase
 ```
 
 ## Build
@@ -153,10 +162,11 @@ xmake f -m debug && xmake      # debug build
 
 **Option 2: Using g++ directly** (no xmake required)
 ```bash
-g++ -std=c++20 -O2 -o dotrix $(find src -name "*.cpp") -Isrc -Isrc/vendor -lstdc++fs -s
+g++ -std=c++20 -O2 -o dotrix $(find src -name "*.cpp") \
+    -Isrc -Isrc/vendor -I../fuibase/include -lstdc++fs -s
 ```
 
-Requires: C++20 compiler (g++ 10+), optional: xmake.
+Requires: C++20 compiler (g++ 10+), [fuibase](https://github.com/Incipe-win/fuibase), optional: xmake.
 
 ## CI / Release
 
