@@ -552,13 +552,15 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                     }
                 }
 
-                // Scroll
+                // Scroll / exit log view
                 int max_scroll = std::max(0, (int)log_lines.size() - ih);
                 if (key == Key_up || key == Key_k)    log_scroll--;
                 if (key == Key_down || key == Key_j)  log_scroll++;
                 if (key == Key_page_up)               log_scroll -= ih;
                 if (key == Key_page_down)             log_scroll += ih;
-                if (key == Key_escape || key == Key_q) { viewing_log = false; log_scroll = 0; }
+                if (key == Key_escape || key == Key_q || key == Key_enter) {
+                    viewing_log = false; log_scroll = 0;
+                }
                 log_scroll = std::clamp(log_scroll, 0, max_scroll);
 
                 // Render log lines
@@ -577,7 +579,7 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
 
                 key_hints(g, h - 2, 2, w - 4, {
                     {"↑↓/jk", "scroll"}, {"PgUp/Dn", "page"},
-                    {"Esc/q", "back"},
+                    {"Enter/Esc/q", "back to results"},
                 }, theme);
                 return;
             }
