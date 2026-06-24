@@ -280,13 +280,19 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         int recipe_idx;
         std::string name;
         TaskState state = TaskState::Pending;
-        std::string log_path;  // temp log file (only kept on failure)
+        std::string log_path;     // temp log file (only kept on failure)
+        std::string log_content;  // loaded on demand for viewing
     };
     std::vector<InstallTask> tasks;
     int current_install = 0;
     int install_ok_count = 0;
     int install_fail_count = 0;
     int skipped_sudo = 0;
+
+    // Results phase state
+    int  result_cursor = 0;   // which failed task is selected
+    bool viewing_log  = false;
+    int  log_scroll   = 0;
 
     // Background worker
     std::thread worker;
@@ -362,7 +368,7 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                     for (int i = 0; i < (int)items.size(); i++) {
                         if (!items[i].checked || items[i].installed) continue;
                         if (items[i].needs_sudo) { skipped_sudo++; continue; }
-                        tasks.push_back({i, items[i].name, TaskState::Pending, {}});
+                        tasks.push_back({i, items[i].name, TaskState::Pending, {}, {}});
                     }
                     if (tasks.empty()) { app.quit(); break; }
                     // Skip system tools (no install script)
@@ -510,28 +516,121 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         // PHASE 3: RESULTS
         // ============================================================
         else if (phase == Results) {
+            // --- Log viewing sub-mode ---
+            if (viewing_log) {
+                // Find the selected failed task
+                int fail_idx = 0, task_idx = -1;
+                for (int i = 0; i < (int)tasks.size(); i++) {
+                    if (tasks[i].state == TaskState::Error) {
+                        if (fail_idx == result_cursor) { task_idx = i; break; }
+                        fail_idx++;
+                    }
+                }
+
+                auto inner = panel(g, "Log: " + (task_idx >= 0 ? tasks[task_idx].name : ""),
+                                   rect_at(2, 2, w-4, h-4), theme);
+                int r = inner.row, c = inner.col, iw = inner.w, ih = inner.h;
+
+                // Load log content lazily
+                if (task_idx >= 0 && tasks[task_idx].log_content.empty() && !tasks[task_idx].log_path.empty()) {
+                    std::ifstream lf(tasks[task_idx].log_path);
+                    if (lf.is_open())
+                        tasks[task_idx].log_content.assign(
+                            std::istreambuf_iterator<char>(lf),
+                            std::istreambuf_iterator<char>());
+                }
+
+                // Split log into lines
+                std::vector<std::string_view> log_lines;
+                if (task_idx >= 0) {
+                    std::string_view content = tasks[task_idx].log_content;
+                    size_t pos = 0;
+                    while (pos < content.size()) {
+                        size_t nl = content.find('\n', pos);
+                        log_lines.push_back(content.substr(pos, nl - pos));
+                        pos = (nl == std::string_view::npos) ? content.size() : nl + 1;
+                    }
+                }
+
+                // Scroll
+                int max_scroll = std::max(0, (int)log_lines.size() - ih);
+                if (key == Key_up || key == Key_k)    log_scroll--;
+                if (key == Key_down || key == Key_j)  log_scroll++;
+                if (key == Key_page_up)               log_scroll -= ih;
+                if (key == Key_page_down)             log_scroll += ih;
+                if (key == Key_escape || key == Key_q) { viewing_log = false; log_scroll = 0; }
+                log_scroll = std::clamp(log_scroll, 0, max_scroll);
+
+                // Render log lines
+                Style line_s; line_s.fg = theme.text_dim;
+                Style hl_s; hl_s.fg = theme.error; hl_s.bold = true;
+                for (int i = 0; i < ih && log_scroll + i < (int)log_lines.size(); i++) {
+                    auto& line = log_lines[log_scroll + i];
+                    // Highlight error lines
+                    bool is_err = (line.find("error") != std::string_view::npos ||
+                                   line.find("Error") != std::string_view::npos ||
+                                   line.find("fatal") != std::string_view::npos);
+                    // Truncate to fit
+                    auto display = detail::ellipsize(line, iw - 2);
+                    g.text(r + i, c, display, is_err ? hl_s : line_s);
+                }
+
+                key_hints(g, h - 2, 2, w - 4, {
+                    {"↑↓/jk", "scroll"}, {"PgUp/Dn", "page"},
+                    {"Esc/q", "back"},
+                }, theme);
+                return;
+            }
+
+            // --- Results summary ---
             auto inner = panel(g, "Install complete", rect_at(2, 2, w-4, h-6), theme);
             int r = inner.row, c = inner.col;
 
             Style ok_s; ok_s.fg = theme.success;
             Style err_s; err_s.fg = theme.error;
+            Style warn_s; warn_s.fg = theme.warning;
             Style text_s; text_s.fg = theme.text;
 
             g.text(r, c, "✓ " + std::to_string(install_ok_count) + " installed", ok_s);
             r++;
-            if (install_fail_count > 0) {
-                g.text(r, c, "✗ " + std::to_string(install_fail_count) + " failed", err_s);
+
+            // List failed tools with cursor
+            std::vector<int> failed_indices;
+            for (int i = 0; i < (int)tasks.size(); i++)
+                if (tasks[i].state == TaskState::Error)
+                    failed_indices.push_back(i);
+
+            if (!failed_indices.empty()) {
+                g.text(r, c, "✗ " + std::to_string(install_fail_count) + " failed (select to view log):", err_s);
                 r++;
+                // Nav
+                if (key == Key_up || key == Key_k)    result_cursor--;
+                if (key == Key_down || key == Key_j)  result_cursor++;
+                if (key == Key_enter || key == Key_space) { viewing_log = true; log_scroll = 0; }
+                result_cursor = std::clamp(result_cursor, 0, (int)failed_indices.size() - 1);
+
+                for (int i = 0; i < (int)failed_indices.size(); i++) {
+                    int ti = failed_indices[i];
+                    bool is_cur = (i == result_cursor);
+                    Style mark_s; mark_s.fg = theme.accent; mark_s.bold = true;
+                    g.text(r + i, c, is_cur ? "❯" : " ", mark_s);
+                    g.text(r + i, c + 2, tasks[ti].name,
+                           is_cur ? Style{theme.text, {}, true} : err_s);
+                }
+                r += (int)failed_indices.size();
             }
+
             if (skipped_sudo > 0) {
-                Style warn_s; warn_s.fg = theme.warning;
                 g.text(r, c, "⚠ " + std::to_string(skipped_sudo) + " skipped (system/sudo tools)", warn_s);
                 r++;
             }
             r += 2;
-            g.text(r, c, "Press any key to exit", Style{theme.text_dim});
+            g.text(r, c, "Press Enter to view log, any other key to exit", Style{theme.text_dim});
 
-            if (key != Key_none) app.quit();
+            if (key != Key_none && key != Key_up && key != Key_down &&
+                key != Key_j && key != Key_k && key != Key_enter && key != Key_space) {
+                app.quit();
+            }
         }
     });
 
@@ -544,35 +643,13 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
     }
     } // ~App runs here — screen cleared, terminal restored
 
-    // Print final summary + failure logs to stderr (now safe from screen clear)
-    if (install_ok_count > 0)
+    // Print final summary to stderr (details were shown in TUI)
     if (install_ok_count > 0)
         Reporter::ok(std::to_string(install_ok_count) + " tool(s) installed");
+    if (install_fail_count > 0)
+        Reporter::error(std::to_string(install_fail_count) + " tool(s) failed (view logs in TUI)");
     if (skipped_sudo > 0)
         Reporter::warn(std::to_string(skipped_sudo) + " tool(s) skipped (system/sudo)");
-
-    if (install_fail_count > 0) {
-        Reporter::error(std::to_string(install_fail_count) + " tool(s) failed — logs below:");
-        for (auto& task : tasks) {
-            if (task.state != TaskState::Error) continue;
-            std::ifstream log_file(task.log_path);
-            if (log_file.is_open()) {
-                std::string content((std::istreambuf_iterator<char>(log_file)),
-                                     std::istreambuf_iterator<char>());
-                std::cerr << "\n  --- " << task.name << " ---\n";
-                // Show last 20 lines of log
-                int lines = 0;
-                size_t pos = content.size();
-                while (pos > 0 && lines < 20) {
-                    pos = content.rfind('\n', pos - 1);
-                    if (pos == std::string::npos) { pos = 0; break; }
-                    lines++;
-                }
-                std::cerr << content.substr(pos) << "\n";
-                fs::remove(task.log_path);
-            }
-        }
-    }
 
     auto* path_env = std::getenv("PATH");
     if (path_env && std::string(path_env).find(local_bin.string()) == std::string::npos)
