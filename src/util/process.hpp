@@ -11,7 +11,8 @@ namespace dotrix::util {
 bool run(const std::vector<std::string>& cmd);
 
 /// Run silently — output goes to /dev/null. Returns true on success.
-bool run_silent(const std::vector<std::string>& cmd);
+/// If log_path is non-empty, output is redirected there instead (for failure inspection).
+bool run_silent(const std::vector<std::string>& cmd, const std::string& log_path = "");
 
 /// Run and capture stdout.  Returns empty string on failure.
 std::string capture(const std::vector<std::string>& cmd);

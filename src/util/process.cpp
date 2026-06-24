@@ -10,10 +10,13 @@ bool run(const std::vector<std::string>& cmd) {
     return system(line.c_str()) == 0;
 }
 
-bool run_silent(const std::vector<std::string>& cmd) {
+bool run_silent(const std::vector<std::string>& cmd, const std::string& log_path) {
     std::string line;
     for (auto& a : cmd) line += a + " ";
-    line += " >/dev/null 2>&1";
+    if (log_path.empty())
+        line += " >/dev/null 2>&1";
+    else
+        line += " >" + log_path + " 2>&1";
     return system(line.c_str()) == 0;
 }
 

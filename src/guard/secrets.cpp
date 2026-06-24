@@ -193,7 +193,6 @@ std::string SecretsGuard::redact_line(const std::string& line) {
     if (sep_pos == std::string::npos) return "";
 
     auto after = line.find_first_of(",;#", sep_pos + 1);
-    auto end = (after != std::string::npos) ? after : line.size();
 
     auto prefix = line.substr(0, sep_pos + 1);
     auto suffix = (after != std::string::npos) ? line.substr(after) : "";

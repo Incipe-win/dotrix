@@ -22,6 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone fuibase
+        run: git clone https://github.com/Incipe-win/fuibase.git ../fuibase
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:

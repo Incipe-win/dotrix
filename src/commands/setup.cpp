@@ -170,9 +170,10 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
 
         // Write temp script
         auto script = fs::temp_directory_path() / ("dotrix-setup-" + t.name + ".sh");
+        auto log_path = (fs::temp_directory_path() / ("dotrix-log-" + t.name + ".txt")).string();
         {
             std::ofstream out(script);
-            out << "#!/usr/bin/env bash\nset -e\n" << t.install << "\n";
+            out << "#!/usr/bin/env bash\nset -ex\n" << t.install << "\n";
         }
         fs::permissions(script, fs::perms::owner_exec, fs::perm_options::add);
 
@@ -180,7 +181,7 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
         std::atomic<bool> done{false};
         std::atomic<bool> ok{false};
         std::thread worker([&]() {
-            ok = util::run_silent({script.string()});
+            ok = util::run_silent({script.string()}, log_path);
             done = true;
         });
 
@@ -203,7 +204,7 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
         fs::remove(script);
 
         if (ok) {
-            // Final bar shows completed count
+            fs::remove(log_path);
             filled = to_install > 0 ? (attempted * bar_w / to_install) : 0;
             std::string bar_final;
             for (int i = 0; i < bar_w; i++)
@@ -213,7 +214,7 @@ int SetupCommand::run_install(const std::vector<Recipe>& all,
                         + "  " + t.name + " installed");
             ++installed_now;
         } else {
-            Reporter::error(t.name + " failed");
+            Reporter::error(t.name + " failed — log: " + log_path);
         }
     }
 
@@ -266,6 +267,7 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         int recipe_idx;
         std::string name;
         TaskState state = TaskState::Pending;
+        std::string log_path;  // temp log file (only kept on failure)
     };
     std::vector<InstallTask> tasks;
     int current_install = 0;
@@ -297,18 +299,19 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         auto& recipe = all[task.recipe_idx];
 
         auto script = fs::temp_directory_path() / ("dotrix-setup-" + recipe.name + ".sh");
+        task.log_path = (fs::temp_directory_path() / ("dotrix-log-" + recipe.name + ".txt")).string();
         fs::create_directories(script.parent_path());
         {
             std::ofstream out(script);
-            out << "#!/usr/bin/env bash\nset -e\n" << recipe.install << "\n";
+            out << "#!/usr/bin/env bash\nset -ex\n" << recipe.install << "\n";
         }
         fs::permissions(script, fs::perms::owner_exec, fs::perm_options::add);
 
         worker_done = false;
         worker_ok = false;
         worker_started = true;
-        worker = std::thread([script, &wd = worker_done, &wo = worker_ok]() {
-            wo = util::run_silent({script.string()});
+        worker = std::thread([script, log = task.log_path, &wd = worker_done, &wo = worker_ok]() {
+            wo = util::run_silent({script.string()}, log);
             wd = true;
         });
     };
@@ -345,7 +348,7 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                     for (int i = 0; i < (int)items.size(); i++) {
                         if (!items[i].checked || items[i].installed) continue;
                         if (items[i].needs_sudo) { skipped_sudo++; continue; }
-                        tasks.push_back({i, items[i].name, TaskState::Pending});
+                        tasks.push_back({i, items[i].name, TaskState::Pending, {}});
                     }
                     if (tasks.empty()) { app.quit(); break; }
                     // Skip system tools (no install script)
@@ -427,7 +430,12 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
                 worker_started = false;
                 auto& task = tasks[current_install];
                 task.state = worker_ok ? TaskState::Done : TaskState::Error;
-                if (worker_ok) install_ok_count++; else install_fail_count++;
+                if (worker_ok) {
+                    install_ok_count++;
+                    fs::remove(task.log_path);  // clean log on success
+                } else {
+                    install_fail_count++;  // keep log on failure
+                }
                 // Clean up temp script
                 auto script = fs::temp_directory_path() / ("dotrix-setup-" + task.name + ".sh");
                 fs::remove(script);
@@ -521,13 +529,34 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
         worker_started = false;
     }
 
-    // Print final summary to stderr
+    // Print final summary + failure logs to stderr
     if (install_ok_count > 0)
         Reporter::ok(std::to_string(install_ok_count) + " tool(s) installed");
-    if (install_fail_count > 0)
-        Reporter::error(std::to_string(install_fail_count) + " tool(s) failed");
     if (skipped_sudo > 0)
         Reporter::warn(std::to_string(skipped_sudo) + " tool(s) skipped (system/sudo)");
+
+    if (install_fail_count > 0) {
+        Reporter::error(std::to_string(install_fail_count) + " tool(s) failed — logs below:");
+        for (auto& task : tasks) {
+            if (task.state != TaskState::Error) continue;
+            std::ifstream log_file(task.log_path);
+            if (log_file.is_open()) {
+                std::string content((std::istreambuf_iterator<char>(log_file)),
+                                     std::istreambuf_iterator<char>());
+                std::cerr << "\n  --- " << task.name << " ---\n";
+                // Show last 20 lines of log
+                int lines = 0;
+                size_t pos = content.size();
+                while (pos > 0 && lines < 20) {
+                    pos = content.rfind('\n', pos - 1);
+                    if (pos == std::string::npos) { pos = 0; break; }
+                    lines++;
+                }
+                std::cerr << content.substr(pos) << "\n";
+                fs::remove(task.log_path);
+            }
+        }
+    }
 
     auto* path_env = std::getenv("PATH");
     if (path_env && std::string(path_env).find(local_bin.string()) == std::string::npos)
