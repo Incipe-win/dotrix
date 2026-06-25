@@ -667,17 +667,76 @@ int SetupCommand::run_tui(const std::vector<Recipe>& all) {
 }
 
 int SetupCommand::run_add() {
-    Recipe r;
-    std::cout << "Name (one word): ";       std::getline(std::cin, r.name);
-    if (r.name.empty()) return 0;
-    std::cout << "Description: ";            std::getline(std::cin, r.desc);
-    std::cout << "Check command [" << r.name << "]: ";
-    std::string s; std::getline(std::cin, s);
-    r.check = s.empty() ? r.name : s;
-    std::cout << "Install command (shell): ";std::getline(std::cin, r.install);
-    std::cout << "Needs sudo? [y/N]: ";
-    std::getline(std::cin, s);
-    r.needs_sudo = (s == "y" || s == "Y");
+    using namespace fb;
+
+    Recipe recipe;
+    int focus = 0;   // 0=name, 1=desc, 2=check, 3=install, 4=sudo, 5=save
+    bool cancelled = false;
+    bool saved = false;
+
+    App app;
+    app.on_render([&](Screen& g, Key key, Theme& theme) {
+        int w = g.width(), h = g.height();
+        auto in = panel(g, "Add tool recipe", rect_at(2, 2, w-4, h-4), theme);
+        int r = in.row, c = in.col, iw = in.w;
+
+        // Tab / Shift+Tab navigation
+        if (key == Key_tab)       focus = (focus + 1) % 6;
+        if (key == Key_escape || key == Key_q) cancelled = true;
+
+        Style label_s; label_s.fg = theme.text_dim;
+        Style hint_s;  hint_s.fg = theme.text_dim; hint_s.dim = true;
+
+        // Name
+        g.text(r, c, "Name", label_s);
+        input(g, "", recipe.name, r, c + 6, std::min(30, iw - 7), focus == 0 ? key : Key_none, theme);
+        g.text(r + 1, c + 6, "(one word, e.g. wezterm)", hint_s);
+        r += 3;
+
+        // Description
+        g.text(r, c, "Description", label_s);
+        input(g, "", recipe.desc, r, c + 13, std::min(40, iw - 14), focus == 1 ? key : Key_none, theme);
+        r += 3;
+
+        // Check command
+        g.text(r, c, "Check", label_s);
+        input(g, "", recipe.check, r, c + 7, std::min(30, iw - 8), focus == 2 ? key : Key_none, theme);
+        g.text(r + 1, c + 7, "(e.g. wezterm, leave empty = same as name)", hint_s);
+        r += 3;
+
+        // Install command
+        g.text(r, c, "Install", label_s);
+        input(g, "", recipe.install, r, c + 9, std::min(50, iw - 10), focus == 3 ? key : Key_none, theme);
+        g.text(r + 1, c + 9, "(shell script to install the tool)", hint_s);
+        r += 3;
+
+        // Needs sudo
+        checkbox(g, "Needs sudo", recipe.needs_sudo, r, c, focus == 4 ? key : Key_none, theme);
+        r += 3;
+
+        // Save button
+        r += 1;
+        button(g, "  Save  ", r, c, focus == 5 ? key : Key_none, theme, focus == 5);
+        button(g, " Cancel ", r, c + 10,
+               focus == 6 ? key : Key_none, theme, focus == 6);
+
+        if ((focus == 5 && key == Key_enter) || (focus == 6 && key == Key_enter))
+            cancelled = (focus == 6);
+        if (focus == 5 && key == Key_enter) saved = true;
+
+        key_hints(g, h - 2, 2, w - 4, {
+            {"Tab", "next field"}, {"Enter", "save"},
+            {"Esc/q", "cancel"},
+        }, theme);
+
+        if (saved || cancelled) app.quit();
+    });
+
+    app.run();
+
+    if (cancelled || recipe.name.empty()) { Reporter::info("cancelled"); return 0; }
+
+    if (recipe.check.empty()) recipe.check = recipe.name;
 
     // Load existing custom recipes
     nlohmann::json j = nlohmann::json::array();
@@ -689,21 +748,19 @@ int SetupCommand::run_add() {
     }
 
     j.push_back({
-        {"name", r.name},
-        {"desc", r.desc},
-        {"check", r.check},
-        {"install", r.install},
-        {"needs_sudo", r.needs_sudo}
+        {"name", recipe.name},
+        {"desc", recipe.desc},
+        {"check", recipe.check},
+        {"install", recipe.install},
+        {"needs_sudo", recipe.needs_sudo}
     });
 
     fs::create_directories(path.parent_path());
     std::ofstream out(path);
     out << j.dump(2) << "\n";
 
-    Reporter::ok("added: " + r.name);
-    Reporter::info("custom recipes: " + path.string());
-    auto* home = std::getenv("HOME");
-    if (home) Reporter::info("recipes stored in dotfiles repo — synced automatically");
+    Reporter::ok("added: " + recipe.name);
+    Reporter::info("recipes: " + path.string());
     return 0;
 }
 

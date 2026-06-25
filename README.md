@@ -59,8 +59,7 @@ exec zsh
 ## Commands
 
 ```
-dotrix <file...>            add — start tracking (auto-redacts secrets)
-dotrix add     <file...>    add — explicit form
+dotrix add     [<file...>]  track config files (no args = TUI file browser)
 dotrix remove  <file...>    stop tracking (alias: rm)
 dotrix capture              save live changes → repo (auto-redacts)
 dotrix sync                 deploy repo → live (smart-merge secrets)
@@ -68,8 +67,10 @@ dotrix list                 show managed files
 dotrix status               show files with uncommitted changes
 dotrix scan                 scan managed files for secrets
 dotrix check                show which tools are installed / missing
-dotrix setup                dev-tool installer with TUI (--pick)
-dotrix setup --add          add custom install recipe
+dotrix setup --pick         TUI: install dev tools interactively
+dotrix setup --add          TUI: add custom install recipe
+dotrix setup --rm  <name>   remove custom install recipe
+dotrix setup --run <name>   install specific tools (CLI)
 dotrix config               manage dotrix settings (token, paths)
 dotrix help
 ```
