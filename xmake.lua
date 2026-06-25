@@ -1,15 +1,17 @@
 add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 
--- Read version from git tag
-local version = os.iorun("git describe --tags --always --dirty 2>/dev/null || echo unknown"):trim()
-
 target("dotrix")
     set_kind("binary")
     add_files("src/**.cpp")
     add_includedirs("src", "src/vendor", "../fuibase/include")
     set_targetdir("$(projectdir)")
-    add_defines("DOTRIX_VERSION=\"" .. version .. "\"")
+    before_build(function (target)
+        local v = "unknown"
+        local out, err = os.iorun("git describe --tags --always")
+        if out and out:trim() ~= "" then v = out:trim() end
+        target:add("defines", 'DOTRIX_VERSION="' .. v .. '"')
+    end)
 
     if is_plat("linux") then
         add_links("stdc++fs", "pthread")
