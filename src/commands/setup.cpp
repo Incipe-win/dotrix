@@ -680,53 +680,59 @@ int SetupCommand::run_add() {
         auto in = panel(g, "Add tool recipe", rect_at(2, 2, w-4, h-4), theme);
         int r = in.row, c = in.col, iw = in.w;
 
-        // Tab / Shift+Tab navigation
-        if (key == Key_tab)       focus = (focus + 1) % 6;
+        // Navigation: Tab = next, Shift+Tab = prev
+        if (key == Key_tab)       focus = (focus + 1) % 7;
+        if (key == Key_up)        focus = (focus + 6) % 7;  // prev (Shift+Tab fallback)
+        if (key == Key_enter && focus == 5) saved = true;
+        if (key == Key_enter && focus == 6) cancelled = true;
         if (key == Key_escape || key == Key_q) cancelled = true;
 
-        Style label_s; label_s.fg = theme.text_dim;
-        Style hint_s;  hint_s.fg = theme.text_dim; hint_s.dim = true;
+        Style label_s;  label_s.fg = theme.text_dim;
+        Style focus_ls; focus_ls.fg = theme.accent; focus_ls.bold = true;  // focused label
+        Style hint_s;   hint_s.fg = theme.text_dim; hint_s.dim = true;
+        Style mark_s;   mark_s.fg = theme.accent; mark_s.bold = true;
+
+        auto focused = [&](int n) -> Key { return focus == n ? key : Key_none; };
+        auto label   = [&](int n) -> Style& { return focus == n ? focus_ls : label_s; };
 
         // Name
-        g.text(r, c, "Name", label_s);
-        input(g, "", recipe.name, r, c + 6, std::min(30, iw - 7), focus == 0 ? key : Key_none, theme);
-        g.text(r + 1, c + 6, "(one word, e.g. wezterm)", hint_s);
+        g.text(r, c,     (focus == 0 ? "❯ " : "  ") + std::string("Name"), label(0));
+        input(g, "", recipe.name, r, c + 8, std::min(30, iw - 9), focused(0), theme);
+        g.text(r + 1, c + 8, "(one word, e.g. wezterm)", hint_s);
         r += 3;
 
         // Description
-        g.text(r, c, "Description", label_s);
-        input(g, "", recipe.desc, r, c + 13, std::min(40, iw - 14), focus == 1 ? key : Key_none, theme);
+        g.text(r, c,     (focus == 1 ? "❯ " : "  ") + std::string("Description"), label(1));
+        input(g, "", recipe.desc, r, c + 15, std::min(40, iw - 16), focused(1), theme);
         r += 3;
 
         // Check command
-        g.text(r, c, "Check", label_s);
-        input(g, "", recipe.check, r, c + 7, std::min(30, iw - 8), focus == 2 ? key : Key_none, theme);
-        g.text(r + 1, c + 7, "(e.g. wezterm, leave empty = same as name)", hint_s);
+        g.text(r, c,     (focus == 2 ? "❯ " : "  ") + std::string("Check"), label(2));
+        input(g, "", recipe.check, r, c + 9, std::min(30, iw - 10), focused(2), theme);
+        g.text(r + 1, c + 9, "(e.g. wezterm, leave empty = same as name)", hint_s);
         r += 3;
 
         // Install command
-        g.text(r, c, "Install", label_s);
-        input(g, "", recipe.install, r, c + 9, std::min(50, iw - 10), focus == 3 ? key : Key_none, theme);
-        g.text(r + 1, c + 9, "(shell script to install the tool)", hint_s);
+        g.text(r, c,     (focus == 3 ? "❯ " : "  ") + std::string("Install"), label(3));
+        input(g, "", recipe.install, r, c + 11, std::min(50, iw - 12), focused(3), theme);
+        g.text(r + 1, c + 11, "(shell script to install the tool)", hint_s);
         r += 3;
 
         // Needs sudo
-        checkbox(g, "Needs sudo", recipe.needs_sudo, r, c, focus == 4 ? key : Key_none, theme);
+        g.text(r, c, (focus == 4 ? "❯ " : "  "), mark_s);
+        checkbox(g, "Needs sudo", recipe.needs_sudo, r, c + 2, focused(4), theme);
         r += 3;
 
-        // Save button
+        // Buttons
         r += 1;
-        button(g, "  Save  ", r, c, focus == 5 ? key : Key_none, theme, focus == 5);
-        button(g, " Cancel ", r, c + 10,
-               focus == 6 ? key : Key_none, theme, focus == 6);
-
-        if ((focus == 5 && key == Key_enter) || (focus == 6 && key == Key_enter))
-            cancelled = (focus == 6);
-        if (focus == 5 && key == Key_enter) saved = true;
+        bool on_save   = (focus == 5);
+        bool on_cancel = (focus == 6);
+        button(g, "  Save  ", r, c,     focused(5), theme, on_save);
+        button(g, " Cancel ", r, c + 10, focused(6), theme, on_cancel);
 
         key_hints(g, h - 2, 2, w - 4, {
-            {"Tab", "next field"}, {"Enter", "save"},
-            {"Esc/q", "cancel"},
+            {"Tab/↑", "next"}, {"Enter", on_save ? "save" : "cancel"},
+            {"Esc/q", "quit"},
         }, theme);
 
         if (saved || cancelled) app.quit();
