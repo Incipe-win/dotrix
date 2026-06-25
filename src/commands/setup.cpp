@@ -716,7 +716,7 @@ int SetupCommand::run_add() {
         r += 3;
 
         // Needs sudo
-        checkbox(g, "Needs sudo", recipe.needs_sudo, r, c, key_for(4), theme);
+        checkbox(g, "Needs sudo", recipe.needs_sudo, r, c, key_for(4), theme, focused(4));
         r += 3;
 
         // Buttons
