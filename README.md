@@ -164,7 +164,8 @@ xmake f -m debug && xmake      # debug build
 **Option 2: Using g++ directly** (no xmake required)
 ```bash
 g++ -std=c++20 -O2 -o dotrix $(find src -name "*.cpp") \
-    -Isrc -Isrc/vendor -I../fuibase/include -lstdc++fs -lpthread -static -s
+    -Isrc -Isrc/vendor -I../fuibase/include -lstdc++fs -lpthread -static -s \
+    -DDOTRIX_VERSION="\"$(git describe --tags --always --dirty 2>/dev/null || echo unknown)\""
 ```
 
 Requires: C++20 compiler (g++ 10+), [fuibase](https://github.com/Incipe-win/fuibase), optional: xmake.

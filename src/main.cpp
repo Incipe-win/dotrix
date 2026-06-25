@@ -68,10 +68,9 @@ public:
     }
 
     void print_help(const char* prog) const {
-        std::cout << "dotrix — dotfiles manager\n\n";
+        std::cout << "dotrix " DOTRIX_VERSION " — dotfiles manager\n\n";
         for (auto& [name, cmd] : registry_) {
             std::cout << "  " << prog << " " << name;
-            // pad to align descriptions
             auto pad = 22 - name.size();
             if (pad < 2) pad = 2;
             std::cout << std::string(pad, ' ') << cmd->description() << "\n";
@@ -175,6 +174,10 @@ int main(int argc, char* argv[]) {
     std::string name = argv[1];
     if (name == "help" || name == "-h" || name == "--help") {
         dispatcher.print_help(argv[0]);
+        return 0;
+    }
+    if (name == "--version" || name == "-V") {
+        std::cout << "dotrix " DOTRIX_VERSION "\n";
         return 0;
     }
 
