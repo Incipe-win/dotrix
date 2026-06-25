@@ -677,7 +677,8 @@ int SetupCommand::run_add() {
     App app;
     app.on_render([&](Screen& g, Key key, Theme& theme) {
         int w = g.width(), h = g.height();
-        auto in = panel(g, "Add tool recipe", rect_at(2, 2, std::min(62, w-2), h-4), theme);
+        int pw = std::max(50, w - 6);  // use most of the screen width
+        auto in = panel(g, "Add tool recipe", rect_at(2, (w - pw)/2, pw, h - 4), theme);
         int r = in.row, c = in.col;
 
         // Navigation
