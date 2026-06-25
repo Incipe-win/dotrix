@@ -7,9 +7,13 @@ target("dotrix")
     add_includedirs("src", "src/vendor", "../fuibase/include")
     set_targetdir("$(projectdir)")
     before_build(function (target)
+        import("lib.detect.find_tool")
+        local git = find_tool("git")
         local v = "unknown"
-        local out, err = os.iorun("git describe --tags --always")
-        if out and out:trim() ~= "" then v = out:trim() end
+        if git then
+            local out = try { function() return os.iorunv(git.program, {"describe", "--tags", "--always"}) end }
+            if out and out:trim() ~= "" then v = out:trim() end
+        end
         target:add("defines", 'DOTRIX_VERSION="' .. v .. '"')
     end)
 
