@@ -5,6 +5,9 @@ build/
 # Binary (build from source: xmake)
 dotrix
 
+# LSP
+compile_commands.json
+
 # IDE
 .vscode/
 .idea/
