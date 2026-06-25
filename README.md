@@ -114,7 +114,7 @@ token from `dotrix config`.
 
 ```
 ~/.config/dotrix/config.json      dotrix settings (token, repo path)
-~/.dotfiles/.dotrix/recipes.json  tool install recipes
+~/.config/dotrix/recipes.json      tool install recipes
 ~/.dotfiles/.dotrix/manifest.json managed file list
 ```
 

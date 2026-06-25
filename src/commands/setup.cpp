@@ -46,11 +46,10 @@ std::vector<SetupCommand::Recipe> SetupCommand::load_recipes() {
     if (!fs::exists(path)) {
         fs::create_directories(path.parent_path());
 
-        // Migrate from old location (~/.config/dotrix/recipes.json) if exists
-        auto* h = std::getenv("HOME");
-        auto old_path = h ? fs::path(h) / ".config/dotrix/recipes.json" : fs::path();
-        if (!old_path.empty() && fs::exists(old_path)) {
-            fs::create_directories(path.parent_path());
+        // Migrate from old location (repo/.dotrix/recipes.json) if exists
+        auto cfg = Config::load();
+        auto old_path = cfg.repo / ".dotrix" / "recipes.json";
+        if (fs::exists(old_path)) {
             fs::copy_file(old_path, path);
             fs::remove(old_path);
         } else {
@@ -63,8 +62,9 @@ std::vector<SetupCommand::Recipe> SetupCommand::load_recipes() {
 }
 
 fs::path SetupCommand::recipes_path() {
-    auto cfg = Config::load();
-    return cfg.repo / ".dotrix" / "recipes.json";
+    auto* h = std::getenv("HOME");
+    auto dir = h ? fs::path(h) / ".config/dotrix" : fs::path();
+    return dir / "recipes.json";
 }
 
 // ============================================================
