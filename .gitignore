@@ -8,9 +8,10 @@ dotrix
 # LSP
 compile_commands.json
 
-# IDE
+# IDE / editors
 .vscode/
 .idea/
+.cache/
 *.swp
 *.swo
 *~
